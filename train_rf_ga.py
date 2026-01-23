@@ -3,17 +3,35 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.ensemble import RandomForestClassifier
 import random
 import time
 import os
 import shap
+import sys
 
 # Ensure result directory exists
 if not os.path.exists('result'):
     os.makedirs('result')
+
+# Logger class to write to both stdout and file
+class Logger(object):
+    def __init__(self, filename):
+        self.terminal = sys.stdout
+        self.log = open(filename, "w")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
+
+# Redirect stdout to file + terminal
+sys.stdout = Logger("result/rf_ga_output.txt")
 
 # ==========================================
 # 1. SETUP & DATA LOADING
@@ -55,28 +73,33 @@ y_test_final = test_df['labels']
 
 # Split for Tuning
 X_train_full, X_val, y_train_full, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
-sample_size = 10000 
+sample_size = 20000  # Increased sample size for better stability
 X_train_sub = X_train_full.iloc[:sample_size]
 y_train_sub = y_train_full.iloc[:sample_size]
-X_val_sub = X_val.iloc[:2000]
-y_val_sub = y_val.iloc[:2000]
+
+# Filter out rare classes for tuning stability
+class_counts = y_train_sub.value_counts()
+valid_classes = class_counts[class_counts >= 5].index
+mask = y_train_sub.isin(valid_classes)
+X_train_sub = X_train_sub[mask]
+y_train_sub = y_train_sub[mask]
 
 # ==========================================
 # 2. IMPLEMENTASI GENETIC ALG. (RF TUNING)
 # ==========================================
 class FastGA_Tuning_RF:
-    def __init__(self, pop_size=10, n_generations=5, mutation_rate=0.1, crossover_rate=0.7):
+    def __init__(self, pop_size=30, n_generations=20, mutation_rate=0.2, crossover_rate=0.8):
         self.pop_size = pop_size
         self.n_generations = n_generations
         self.mutation_rate = mutation_rate
         self.crossover_rate = crossover_rate
         
-        # Define Search Space
+        # Define Search Space (Expanded)
         self.param_bounds = {
-            'n_estimators': (50, 200),       # Int
-            'max_depth': (5, 30),            # Int
-            'min_samples_split': (2, 10),    # Int
-            'min_samples_leaf': (1, 5),      # Int
+            'n_estimators': (50, 500),       # Int
+            'max_depth': (5, 50),            # Int
+            'min_samples_split': (2, 20),    # Int
+            'min_samples_leaf': (1, 10),     # Int
             'max_features_idx': (0, 2)       # Int: 0=sqrt, 1=log2, 2=None
         }
         self.max_features_map = {0: 'sqrt', 1: 'log2', 2: None}
@@ -107,10 +130,11 @@ class FastGA_Tuning_RF:
             random_state=42
         )
         
-        model.fit(X_train_sub, y_train_sub)
-        preds = model.predict(X_val_sub)
-        acc = accuracy_score(y_val_sub, preds)
-        return acc
+        # Use Cross-Validation (3-fold) with F1 Maintained (Macro) for imbalance handling directly in loop or here
+        # Using accuracy as requested but on CV for robustness
+        # Switching to f1_macro for better handling of minority classes
+        scores = cross_val_score(model, X_train_sub, y_train_sub, cv=3, scoring='f1_macro', n_jobs=-1, error_score='raise')
+        return scores.mean()
 
     def crossover(self, p1, p2):
         if random.random() < self.crossover_rate:
@@ -133,16 +157,19 @@ class FastGA_Tuning_RF:
         start_time = time.time()
         
         for gen in range(self.n_generations):
+            gen_start_time = time.time()
             fitnesses = [self.fitness(ind) for ind in self.population]
             max_fit = max(fitnesses)
             idx_best = fitnesses.index(max_fit)
             
+            gen_duration = time.time() - gen_start_time
+            
             if max_fit > self.best_fitness:
                 self.best_fitness = max_fit
                 self.best_solution = self.population[idx_best].copy()
-                print(f"Gen {gen+1}: New Best Acc = {max_fit:.4f} | Params: {self.best_solution}")
+                print(f"Gen {gen+1}: New Best CV F1-Macro = {max_fit:.4f} | Time: {gen_duration:.2f}s | Params: {self.best_solution}")
             else:
-                print(f"Gen {gen+1}: Best Acc = {self.best_fitness:.4f}")
+                print(f"Gen {gen+1}: Best CV F1-Macro = {self.best_fitness:.4f} | Time: {gen_duration:.2f}s")
 
             next_pop = [self.best_solution.copy()]
             
@@ -165,7 +192,8 @@ class FastGA_Tuning_RF:
 # ==========================================
 # 3. RUNNING TUNING
 # ==========================================
-ga = FastGA_Tuning_RF(pop_size=10, n_generations=5)
+# Increased population and generations for better exploration
+ga = FastGA_Tuning_RF(pop_size=20, n_generations=15) 
 best_params_raw = ga.run()
 
 # Decode params
@@ -192,10 +220,56 @@ final_model = RandomForestClassifier(
 final_model.fit(X, y)
 
 y_pred = final_model.predict(X_test_final)
-acc = accuracy_score(y_test_final, y_pred)
-print(f"\nFinal Test Accuracy: {acc:.4f}")
-print("Classification Report:")
-print(classification_report(y_test_final, y_pred, zero_division=0))
+
+# Filter out -1 (Unknown labels) for fair evaluation
+mask_known = y_test_final != -1
+y_test_known = y_test_final[mask_known]
+y_pred_known = y_pred[mask_known]
+
+acc_known = accuracy_score(y_test_known, y_pred_known)
+print(f"\nFinal Test Accuracy (Known Classes Only): {acc_known:.4f}")
+print(f"(Excluded {len(y_test_final) - len(y_test_known)} samples with unseen labels)")
+
+print("Classification Report (Known Classes Only):")
+print(classification_report(y_test_known, y_pred_known, zero_division=0))
+
+# 4.1 Confusion Matrix (Known Classes)
+cm = confusion_matrix(y_test_known, y_pred_known)
+plt.figure(figsize=(12, 10))
+sns.set_style("whitegrid")  # Ensure style is set if reused
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+            xticklabels=le_label.classes_, 
+            yticklabels=le_label.classes_,
+            linewidths=0.5, linecolor='gray')
+plt.title('Confusion Matrix (RF GA - Known Classes)', fontsize=16, fontweight='bold', pad=20)
+plt.xlabel('Predicted Label', fontsize=12)
+plt.ylabel('Actual Label', fontsize=12)
+plt.xticks(rotation=45, ha='right')
+plt.yticks(rotation=0)
+plt.tight_layout()
+plt.savefig('result/rf_ga_confusion_matrix.png', dpi=300)
+plt.close()
+print("Saved result/rf_ga_confusion_matrix.png")
+
+# 4.2 Feature Importance (Built-in)
+# Enhancing this to match the seaborn style of other scripts
+plt.figure(figsize=(12, 10))
+importances = final_model.feature_importances_
+indices = np.argsort(importances)[::-1][:20]  # Top 20
+features_top = [selected_features[i] for i in indices]
+importances_top = importances[indices]
+
+ax = sns.barplot(x=importances_top, y=features_top, hue=features_top, palette="viridis", legend=False)
+for i in ax.containers:
+    ax.bar_label(i, fmt='%.3f', padding=3)
+
+plt.title("Top 20 Feature Importance (RF GA)", fontsize=16, fontweight='bold', pad=20)
+plt.xlabel("Importance Score", fontsize=12)
+plt.ylabel("Features", fontsize=12)
+plt.tight_layout()
+plt.savefig('result/rf_ga_feature_importance.png', dpi=300)
+plt.close()
+print("Saved result/rf_ga_feature_importance.png")
 
 # ==========================================
 # 5. SHAP ANALYSIS

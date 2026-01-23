@@ -1,0 +1,251 @@
+---
+title: "Deteksi Serangan Siber Berbasis AI"
+subtitle: "Optimasi Hyperparameter Random Forest & XGBoost Menggunakan Algoritma Genetika"
+author: 
+  - Eric Julianto (20240804052)
+  - Farhan Abdul Jabar Rosyidi (20240804047)
+format:
+    revealjs:
+        theme: white
+        css: custom.css
+        resources: [logo-white.png]
+        slide-number: c/t
+        chalkboard:
+            buttons: true
+            theme: whiteboard
+        transition: slide
+        background-transition: fade
+        code-copy: true
+        code-fold: true
+        code-overflow: wrap
+        # scrollable: true
+        smaller: false
+        incremental: false
+        preview-links: auto
+        logo: "logo.png"
+        footer: "Proyek Artificial Intelligence - Optimasi GA"
+        margin: 0.1
+        fig-responsive: true
+        highlight-style: github
+        html-math-method: katex
+bibliography: references.bib
+---
+
+# Tujuan Penelitian {#objectives background-color="#2c3e50"}
+
+- **Tujuan Utama**: Mengoptimalkan Hyperparameter Random Forest (RF) dan XGBoost (XGB) menggunakan **Algoritma Genetika (GA)**.
+- **Komparasi**: Mengevaluasi peningkatan performa dibandingkan dengan Baseline (Parameter Default).
+- **Fokus**: Meningkatkan kemampuan deteksi pada kelas serangan minoritas (menggunakan skor **F1-Macro**).
+
+---
+
+## Metodologi: Data & Fitur {#methodology-data .smaller}
+
+### Penanganan Data
+- **Dataset**: NSL-KDD (Keamanan Informasi) [@nslkdd].
+- **Seleksi Fitur**: Menggunakan set tetap **25 Fitur** (berdasarkan Bat Algorithm / Paper IJCS [@ardiyansa2024network]).
+- **Preprocessing**:
+  - Filter label tidak dikenal (`-1`) untuk pengujian yang adil.
+  - Optimasi kelas langka dilakukan secara spesifik saat Cross-Validation untuk menjamin stabilitas.
+
+---
+
+## Metodologi: Algoritma {#methodology-algo .smaller}
+
+### Model Baseline
+- **Random Forest** & **XGBoost** standar dengan pengaturan default library.
+- Berfungsi sebagai tolak ukur (benchmark) performa.
+
+### Model Teroptimasi (GA)
+- **Populasi**: 10-20 individu.
+- **Generasi**: 15 generasi.
+- **Fungsi Fitness**: **3-Fold CV F1-Macro**.
+- **Target**: Memaksimalkan rata-rata harmonik presisi dan recall di seluruh kelas, memprioritaskan kelas minoritas.
+
+---
+
+## Penelitian Terdahulu {#previous-work .smaller}
+
+::::: {.columns}
+
+:::: {.column width="40%"}
+![](./images/previous_work.png){width="100%" style="border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"}
+::::
+
+:::: {.column width="60%"}
+**Judul Paper**:
+*Network Attack Classification using Neural Network-Based Imputation Technique*
+
+**Publikasi**:
+*Indonesian Journal of Computer Science (IJCS)*, Vol 13, Issue 5, Oct 2024.
+
+**Kontribusi Utama**:
+
+- Menggunakan Teknik Imputasi berbasis Neural Network.
+- Penerapan **Bat Algorithm** untuk seleksi fitur menghasilkan **25 fitur optimal**.
+
+::: {.callout-note}
+**Relevansi**:
+Riset saat ini menggunakan 25 fitur yang sama hasil seleksi Bat Algorithm tersebut, untuk berfokus penuh pada **Optimasi Hyperparameter**.
+:::
+::::
+
+:::::
+
+---
+
+## Tinjauan Literatur Modern {#lit-review .smaller}
+
+Riset terkini (2020-2025) menunjukkan tren kuat dalam penggunaan Algoritma Bio-Inspired untuk optimasi IDS.
+
+**1. Optimasi Ensemble Stack dengan GA**
+> Mengusulkan **OSEN-IoT**, menggunakan Genetic Algorithm untuk mengoptimalkan *meta-learner* pada stacked model. Hasilnya menunjukkan generalisasi tinggi pada dataset heterogen [@osen2025].
+
+**2. Butterfly Optimization untuk Anomaly Detection**
+> Menggunakan optimasi bio-inspired untuk seleksi fitur yang mengurangi dimensi data namun meningkatkan akurasi deteksi anomali [@mahboob2020butterfly].
+
+::: {.callout-tip}
+**Posisi Penelitian Ini**:
+Menggabungkan kekuatan **XGBoost** (sebagai classifier robust) dengan **Genetic Algorithm** (sebagai optimizer hyperparameter) untuk menyeimbangkan presisi pada kelas mayoritas dan recall pada kelas minoritas.
+:::
+
+---
+
+## Tampilan Dataset {#dataset-preview}
+
+::: {style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 75vh; width: 100%; text-align: center;"}
+![](./images/dataset.png){width="85%" style="border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin: 0 auto;"}
+
+<div style="font-size: 0.6em; color: gray; margin-top: 15px;">
+*Cuplikan struktur data NSL-KDD yang digunakan dalam penelitian*
+</div>
+:::
+
+---
+
+## Hasil Optimasi (Training) {#optimization-results .smaller}
+
+Algoritma Genetika berhasil menemukan set parameter dengan performa teoritis (Cross-Validation) yang jauh lebih tinggi.
+
+| Model | Baseline CV F1-Macro | GA Optimized CV F1-Macro | Peningkatan |
+|:---|:---:|:---:|:---:|
+| **Random Forest** | 0.7710 | **0.9864** | +27.9% |
+| **XGBoost** | 0.7594 | **0.9877** | +30.0% |
+
+<br>
+
+::: {.callout-tip}
+### Insight
+Fase optimasi terbukti sangat efektif dalam menemukan parameter yang dapat menjelaskan struktur data latih dengan lebih baik.
+:::
+
+---
+
+## Hasil Pengujian Akhir {#final-results .smaller}
+
+Performa pada Test Set terpisah (Hanya Kelas yang Diketahui).
+
+| Model | Akurasi | Skor F1-Macro | Waktu Training (s) |
+|:---|:---:|:---:|:---:|
+| **RF Baseline** | 0.9623 | 0.73 | 5.7s |
+| **RF GA** | 0.9623 | **0.74** | 352.4s |
+| **XGB Baseline** | 0.9625 | 0.69 | 6.5s |
+| **XGB GA** | **0.9626** | 0.73 | 423.2s |
+
+<br>
+
+::: {.callout-note}
+### Temuan Kunci
+Optimasi GA meningkatkan kemampuan XGBoost dalam mendeteksi serangan langka (F1-Macro naik dari 0.69 ke 0.73), menyamai performa terbaik RF.
+:::
+
+---
+
+## Confusion Matrix: Random Forest {#cm-rf .smaller}
+
+::::: {.columns}
+:::: {.column width="50%"}
+**Baseline (RF Normal)**
+![](../result/rf_normal_confusion_matrix.png){width=100% style="border: 1px solid #ddd; border-radius: 8px;"}
+::::
+:::: {.column width="50%"}
+**Teroptimasi (RF GA)**
+![](../result/rf_ga_confusion_matrix.png){width=100% style="border: 1px solid #ddd; border-radius: 8px;"}
+::::
+:::::
+
+---
+
+## Confusion Matrix: XGBoost {#cm-xgb .smaller}
+
+::::: {.columns}
+:::: {.column width="50%"}
+**Baseline (XGB Normal)**
+![](../result/xgb_normal_confusion_matrix.png){width=100% style="border: 1px solid #ddd; border-radius: 8px;"}
+::::
+:::: {.column width="50%"}
+**Teroptimasi (XGB GA)**
+![](../result/xgb_ga_confusion_matrix.png){width=100% style="border: 1px solid #ddd; border-radius: 8px;"}
+::::
+:::::
+
+---
+
+## Analisis Fitur Penting {#feature-importance .smaller}
+
+
+
+::: {.panel-tabset}
+
+### RF Normal
+![](../result/rf_normal_feature_importance.png){width=60% fig-align="center"}
+
+### RF GA
+![](../result/rf_ga_feature_importance.png){width=60% fig-align="center"}
+
+### XGB Normal
+![](../result/xgb_normal_feature_importance.png){width=60% fig-align="center"}
+
+### XGB GA
+![](../result/xgb_ga_feature_importance.png){width=60% fig-align="center"}
+
+:::
+
+---
+
+## Analisis SHAP (XGBoost GA) {#shap-analysis .smaller}
+
+Memahami fitur apa yang paling berkontribusi terhadap output prediksi model secara keseluruhan.
+
+![](../result/xgb_ga_shap_bar.png){width=70% fig-align="center"}
+
+---
+
+## Kesimpulan & Rekomendasi {#conclusion .smaller}
+
+1.  **Validitas GA**
+    Penggunaan Algoritma Genetika untuk tuning hyperparameter terbukti **sangat efektif** dalam meningkatkan kecocokan model (skor CV > 0.98).
+
+2.  **Generalisasi**
+    - **XGBoost** mendapatkan manfaat terbesar dari tuning, menunjukkan peningkatan generalisasi yang jelas (F1-Macro +0.04).
+    - **Random Forest** secara default sudah robust; tuning yang agresif terkadang justru menyebabkan sedikit overfitting pada data validasi.
+
+3.  **Rekomendasi**
+    Untuk dataset ini, **Optimized XGBoost** adalah model yang direkomendasikan karena menyeimbangkan akurasi tinggi (0.9626) dengan deteksi kelas minoritas yang kuat (F1 0.73).
+
+---
+
+## Referensi {#references .smaller}
+
+::: {#refs}
+:::
+
+
+<div style="text-align: center;">
+
+## Tanya Jawab {#qa}
+
+
+### Terima Kasih!
+
+</div>
